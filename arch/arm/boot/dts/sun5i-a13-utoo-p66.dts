@@ -46,78 +46,34 @@
  */
 
 /dts-v1/;
-#include "sun7i-a20.dtsi"
+#include "sun5i-a13.dtsi"
 #include "sunxi-common-regulators.dtsi"
 #include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/input/input.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/pinctrl/sun4i-a10.h>
 
 / {
-	model = "LeMaker Banana Pro";
-	compatible = "lemaker,bananapro", "allwinner,sun7i-a20";
+	model = "Utoo P66";
+	compatible = "utoo,p66", "allwinner,sun5i-a13";
 
-	leds {
-		compatible = "gpio-leds";
+	i2c_lcd: i2c@0 {
+		/* The lcd panel i2c interface is hooked up via gpios */
+		compatible = "i2c-gpio";
 		pinctrl-names = "default";
-		pinctrl-0 = <&led_pins_bananapro>;
-
-		blue {
-			label = "bananapro:blue:usr";
-			gpios = <&pio 6 2 GPIO_ACTIVE_HIGH>;
-		};
-
-		green {
-			label = "bananapro:green:usr";
-			gpios = <&pio 7 24 GPIO_ACTIVE_HIGH>;
-		};
-	};
-
-	reg_gmac_3v3: gmac-3v3 {
-		compatible = "regulator-fixed";
-		pinctrl-names = "default";
-		pinctrl-0 = <&gmac_power_pin_bananapro>;
-		regulator-name = "gmac-3v3";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		startup-delay-us = <100000>;
-		enable-active-high;
-		gpio = <&pio 7 23 GPIO_ACTIVE_HIGH>;
-	};
-
-	reg_vmmc3: vmmc3 {
-		compatible = "regulator-fixed";
-		pinctrl-names = "default";
-		pinctrl-0 = <&vmmc3_pin_bananapro>;
-		regulator-name = "vmmc3";
-		regulator-min-microvolt = <3300000>;
-		regulator-max-microvolt = <3300000>;
-		enable-active-high;
-		gpio = <&pio 7 22 GPIO_ACTIVE_HIGH>;
+		pinctrl-0 = <&i2c_lcd_pins>;
+		gpios = <&pio 6 12 GPIO_ACTIVE_HIGH>, /* PG12, sda */
+			<&pio 6 10 GPIO_ACTIVE_HIGH>; /* PG10, scl */
+		i2c-gpio,delay-us = <5>;
 	};
 };
 
-&ahci {
-	status = "okay";
+&cpu0 {
+	cpu-supply = <&reg_dcdc2>;
 };
 
 &ehci0 {
 	status = "okay";
-};
-
-&ehci1 {
-	status = "okay";
-};
-
-&gmac {
-	pinctrl-names = "default";
-	pinctrl-0 = <&gmac_pins_rgmii_a>;
-	phy = <&phy1>;
-	phy-mode = "rgmii";
-	phy-supply = <&reg_gmac_3v3>;
-	status = "okay";
-
-	phy1: ethernet-phy@1 {
-		reg = <1>;
-	};
 };
 
 &i2c0 {
@@ -126,137 +82,167 @@
 	status = "okay";
 
 	axp209: pmic@34 {
-		compatible = "x-powers,axp209";
 		reg = <0x34>;
-		interrupt-parent = <&nmi_intc>;
-		interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
-
-		interrupt-controller;
-		#interrupt-cells = <1>;
+		interrupts = <0>;
 	};
 };
 
-&i2c2 {
+#include "axp209.dtsi"
+
+&i2c1 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&i2c2_pins_a>;
+	pinctrl-0 = <&i2c1_pins_a>;
 	status = "okay";
+
+	chipone_icn8318@40 {
+		compatible = "chipone,icn8318";
+		reg = <0x40>;
+		interrupt-parent = <&pio>;
+		interrupts = <9 IRQ_TYPE_EDGE_FALLING>; /* EINT9 (PG9) */
+		pinctrl-names = "default";
+		pinctrl-0 = <&ts_wake_pin_p66>;
+		wake-gpios = <&pio 1 3 GPIO_ACTIVE_HIGH>; /* PB3 */
+		touchscreen-size-x = <800>;
+		touchscreen-size-y = <480>;
+		touchscreen-inverted-x;
+		touchscreen-swapped-x-y;
+	};
+
+	pcf8563: rtc@51 {
+		compatible = "nxp,pcf8563";
+		reg = <0x51>;
+	};
 };
 
-&ir0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&ir0_pins_a>;
+&lradc {
+	vref-supply = <&reg_ldo2>;
 	status = "okay";
+
+	button@200 {
+		label = "Volume Up";
+		linux,code = <KEY_VOLUMEUP>;
+		channel = <0>;
+		voltage = <200000>;
+	};
+
+	button@400 {
+		label = "Volume Down";
+		linux,code = <KEY_VOLUMEDOWN>;
+		channel = <0>;
+		voltage = <400000>;
+	};
 };
 
 &mmc0 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&mmc0_pins_a>, <&mmc0_cd_pin_bananapro>;
+	pinctrl-0 = <&mmc0_pins_a>, <&mmc0_cd_pin_p66>;
 	vmmc-supply = <&reg_vcc3v3>;
 	bus-width = <4>;
-	cd-gpios = <&pio 7 10 GPIO_ACTIVE_HIGH>; /* PH10 */
+	cd-gpios = <&pio 6 0 GPIO_ACTIVE_HIGH>; /* PG0 */
 	cd-inverted;
 	status = "okay";
 };
 
-&mmc3 {
+&mmc2 {
 	pinctrl-names = "default";
-	pinctrl-0 = <&mmc3_pins_a>;
-	vmmc-supply = <&reg_vmmc3>;
-	bus-width = <4>;
+	pinctrl-0 = <&mmc2_pins_a>;
+	vmmc-supply = <&reg_vcc3v3>;
+	bus-width = <8>;
 	non-removable;
 	status = "okay";
 };
 
-&ohci0 {
-	status = "okay";
-};
-
-&ohci1 {
-	status = "okay";
-};
-
 &pio {
-	gmac_power_pin_bananapro: gmac_power_pin@0 {
-		allwinner,pins = "PH23";
-		allwinner,function = "gpio_out";
-		allwinner,drive = <SUN4I_PINCTRL_10_MA>;
-		allwinner,pull = <SUN4I_PINCTRL_NO_PULL>;
-	};
-
-	led_pins_bananapro: led_pins@0 {
-		allwinner,pins = "PH24", "PG2";
-		allwinner,function = "gpio_out";
-		allwinner,drive = <SUN4I_PINCTRL_10_MA>;
-		allwinner,pull = <SUN4I_PINCTRL_NO_PULL>;
-	};
-
-	mmc0_cd_pin_bananapro: mmc0_cd_pin@0 {
-		allwinner,pins = "PH10";
+	mmc0_cd_pin_p66: mmc0_cd_pin@0 {
+		allwinner,pins = "PG0";
 		allwinner,function = "gpio_in";
 		allwinner,drive = <SUN4I_PINCTRL_10_MA>;
 		allwinner,pull = <SUN4I_PINCTRL_PULL_UP>;
 	};
 
-	usb1_vbus_pin_bananapro: usb1_vbus_pin@0 {
-		allwinner,pins = "PH0";
+	usb0_vbus_detect_pin: usb0_vbus_detect_pin@0 {
+		allwinner,pins = "PG1";
+		allwinner,function = "gpio_in";
+		allwinner,drive = <SUN4I_PINCTRL_10_MA>;
+		allwinner,pull = <SUN4I_PINCTRL_PULL_DOWN>;
+	};
+
+	usb0_id_detect_pin: usb0_id_detect_pin@0 {
+		allwinner,pins = "PG2";
+		allwinner,function = "gpio_in";
+		allwinner,drive = <SUN4I_PINCTRL_10_MA>;
+		allwinner,pull = <SUN4I_PINCTRL_PULL_UP>;
+	};
+
+	i2c_lcd_pins: i2c_lcd_pin@0 {
+		allwinner,pins = "PG10", "PG12";
+		allwinner,function = "gpio_out";
+		allwinner,drive = <SUN4I_PINCTRL_10_MA>;
+		allwinner,pull = <SUN4I_PINCTRL_PULL_UP>;
+	};
+
+	ts_wake_pin_p66: ts_wake_pin@0 {
+		allwinner,pins = "PB3";
 		allwinner,function = "gpio_out";
 		allwinner,drive = <SUN4I_PINCTRL_10_MA>;
 		allwinner,pull = <SUN4I_PINCTRL_NO_PULL>;
 	};
 
-	usb2_vbus_pin_bananapro: usb2_vbus_pin@0 {
-		allwinner,pins = "PH1";
-		allwinner,function = "gpio_out";
-		allwinner,drive = <SUN4I_PINCTRL_10_MA>;
-		allwinner,pull = <SUN4I_PINCTRL_NO_PULL>;
-	};
-
-	vmmc3_pin_bananapro: vmmc3_pin@0 {
-		allwinner,pins = "PH22";
+	usb0_vbus_pin_a: usb0_vbus_pin@0 {
+		allwinner,pins = "PB4";
 		allwinner,function = "gpio_out";
 		allwinner,drive = <SUN4I_PINCTRL_10_MA>;
 		allwinner,pull = <SUN4I_PINCTRL_NO_PULL>;
 	};
 };
 
-&reg_usb1_vbus {
-	pinctrl-0 = <&usb1_vbus_pin_bananapro>;
-	gpio = <&pio 7 0 GPIO_ACTIVE_HIGH>; /* PH0 */
+&reg_dcdc2 {
+	regulator-always-on;
+	regulator-min-microvolt = <1000000>;
+	regulator-max-microvolt = <1500000>;
+	regulator-name = "vdd-cpu";
+};
+
+&reg_dcdc3 {
+	regulator-always-on;
+	regulator-min-microvolt = <1000000>;
+	regulator-max-microvolt = <1400000>;
+	regulator-name = "vdd-int-pll";
+};
+
+&reg_ldo1 {
+	regulator-name = "vdd-rtc";
+};
+
+&reg_ldo2 {
+	regulator-always-on;
+	regulator-min-microvolt = <3000000>;
+	regulator-max-microvolt = <3000000>;
+	regulator-name = "avcc";
+};
+
+&reg_ldo3 {
+	regulator-min-microvolt = <3300000>;
+	regulator-max-microvolt = <3300000>;
+	regulator-name = "vcc-wifi";
+};
+
+&reg_usb0_vbus {
+	gpio = <&pio 1 4 GPIO_ACTIVE_HIGH>; /* PB4 */
 	status = "okay";
 };
 
-&reg_usb2_vbus {
-	pinctrl-0 = <&usb2_vbus_pin_bananapro>;
-	gpio = <&pio 7 1 GPIO_ACTIVE_HIGH>; /* PH1 */
-	status = "okay";
-};
-
-&spi0 {
+&usb_otg {
 	pinctrl-names = "default";
-	pinctrl-0 = <&spi0_pins_a>;
-	status = "okay";
-};
-
-&uart0 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart0_pins_a>;
-	status = "okay";
-};
-
-&uart2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart2_pins_a>;
-	status = "okay";
-};
-
-&uart7 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&uart7_pins_a>;
+	pinctrl-0 = <&usb0_id_detect_pin>, <&usb0_vbus_detect_pin>;
+	id_det-gpio = <&pio 6 2 GPIO_ACTIVE_HIGH>; /* PG2 */
+	vbus_det-gpio = <&pio 6 1 GPIO_ACTIVE_HIGH>; /* PG1 */
+	dr_mode = "otg";
 	status = "okay";
 };
 
 &usbphy {
-	usb1_vbus-supply = <&reg_usb1_vbus>;
-	usb2_vbus-supply = <&reg_usb2_vbus>;
+	usb0_vbus-supply = <&reg_usb0_vbus>;
+	usb1_vbus-supply = <&reg_ldo3>;
 	status = "okay";
 };
